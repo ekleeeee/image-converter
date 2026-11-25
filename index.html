@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="사진을 JPG, PNG, WebP로 바꿔요. 사진은 내 브라우저 밖으로 나가지 않아요.">
+<title>사진 형식 바꾸기</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+:root {
+  --bg: #ffffff; --soft: #f2f4f6; --text: #191f28; --sub: #6b7684; --line: #e5e8eb;
+  --blue: #3182f6; --red: #f04452; --green: #03b26c;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  font-size: 1rem; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere;
+}
+h1, h2, p, ul { margin: 0; padding: 0; }
+h1 { font-size: 1.625rem; font-weight: 700; }
+h2 { font-size: 1.25rem; font-weight: 700; }
+ul { list-style: none; }
+svg { display: block; flex: none; }
+.small { font-size: .8125rem; color: var(--sub); }
+.page { max-width: 1072px; margin: 0 auto; padding: 32px 16px 48px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.head p { margin-top: 4px; color: var(--sub); }
+.main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.card { border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+
+button {
+  font: inherit; color: var(--text); background: var(--soft); border: 0; cursor: pointer;
+  min-height: 40px; padding: 8px 16px; border-radius: 8px; font-weight: 600; position: relative;
+  transition: transform .1s, background-color .1s;
+}
+/* 40px 버튼도 누르는 곳은 44px 이상 */
+button::after { content: ""; position: absolute; left: 0; right: 0; top: -4px; bottom: -4px; }
+button:hover { background: var(--line); }
+button:active { transform: scale(.98); }
+button:disabled { cursor: default; transform: none; }
+button.primary {
+  background: var(--blue); color: #fff; min-height: 52px; padding: 8px 24px;
+  border-radius: 12px; font-size: 1.25rem; font-weight: 700;
+}
+button.primary:disabled { opacity: 1; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+/* 빈 화면 */
+.empty {
+  background: var(--soft); border: 2px dashed transparent; border-radius: 16px; padding: 48px 20px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+.empty h2 { margin-top: 16px; }
+.empty p { margin-top: 4px; }
+.empty button { margin-top: 24px; }
+body.dragging .empty, body.dragging .photos { border-color: var(--text); border-style: dashed; }
+
+/* 오류 안내 */
+#upload-error:empty { position: absolute; }
+.alert { border: 1px solid var(--red); border-radius: 16px; padding: 16px; display: flex; gap: 12px; }
+.alert svg { color: var(--red); }
+.alert > div { min-width: 0; }
+.alert strong { font-weight: 700; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+
+/* 설정 */
+.settings { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-content: start; }
+.label { display: block; font-weight: 600; margin-bottom: 8px; }
+.formats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.5rem), 1fr)); gap: 8px; }
+.formats button {
+  min-height: 48px; padding: 8px 4px; border: 2px solid transparent;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+}
+.formats button svg { display: none; }
+.formats button[aria-pressed="true"] { background: var(--bg); border-color: var(--text); font-weight: 700; }
+.formats button[aria-pressed="true"] svg { display: block; }
+.field { position: relative; }
+.field input {
+  width: 100%; height: 3rem; min-height: 48px; font: inherit; color: var(--text); background: var(--bg);
+  border: 1px solid var(--sub); border-radius: 8px; padding: 8px 4rem 8px 12px;
+}
+.field input::placeholder { color: var(--sub); opacity: 1; }
+.field input[aria-invalid="true"] { border: 2px solid var(--red); }
+.field span { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--sub); pointer-events: none; }
+.hint { margin-top: 8px; }
+.inline-error { margin-top: 12px; }
+.settings .primary { width: 100%; }
+.progress:not(:empty) { text-align: center; margin-top: 12px; }
+
+/* 사진 목록 */
+.photos { border: 1px solid var(--line); border-radius: 16px; padding: 20px; min-width: 0; }
+.photos-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.item { display: grid; grid-template-columns: 72px minmax(0, 1fr) 44px; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.item:last-child { border-bottom: 0; padding-bottom: 0; }
+.thumb { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: var(--soft); }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.state { display: flex; align-items: flex-start; gap: 4px; margin-top: 4px; }
+.state svg { margin-top: 2px; }
+.done svg { color: var(--green); }
+.failed svg { color: var(--red); }
+.item .row { margin-top: 12px; }
+.icon-button { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; background: transparent; }
+
+@media (min-width: 800px) {
+  .page { padding-top: 64px; }
+  .work { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+  .work .photos { order: 0; }
+  .work .settings { order: 1; position: sticky; top: 24px; }
+  .empty { padding: 80px 20px; }
+}
+@media (max-width: 799px) { .work { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; } }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+  button:active { transform: none; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="head">
+    <h1>사진 형식 바꾸기</h1>
+    <p>사진은 내 브라우저 밖으로 나가지 않아요</p>
+  </header>
+
+  <main class="main">
+    <input id="picker" type="file" accept="image/*" multiple hidden>
+
+    <section id="empty" class="empty" aria-labelledby="empty-title">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m4 18 5-5 3 3 4-4 5 5"/></svg>
+      <h2 id="empty-title">바꿀 사진을 올려 주세요</h2>
+      <p>사진을 여기로 끌어다 놓아도 돼요</p>
+      <button id="pick" class="primary" type="button">사진 고르기</button>
+    </section>
+
+    <div id="upload-error" aria-live="assertive"></div>
+
+    <div id="work" class="work" hidden>
+      <section class="card settings" aria-labelledby="settings-title">
+        <h2 id="settings-title">어떻게 바꿀까요?</h2>
+        <div>
+          <span class="label" id="format-label">사진 형식</span>
+          <div id="formats" class="formats" role="group" aria-labelledby="format-label"></div>
+        </div>
+        <div>
+          <label class="label" for="width">가로 크기</label>
+          <div class="field">
+            <input id="width" type="text" inputmode="numeric" autocomplete="off" placeholder="원래 크기" aria-describedby="width-hint width-error">
+            <span aria-hidden="true">픽셀</span>
+          </div>
+          <div id="width-error" aria-live="assertive"></div>
+          <p id="width-hint" class="small hint">세로는 비율에 맞춰 줄어들어요. 비워 두면 원래 크기로 바꿔요. 원래보다 커지지는 않아요.</p>
+        </div>
+        <div>
+          <button id="convert" class="primary" type="button">사진 바꾸기</button>
+          <p id="progress" class="progress" role="status"></p>
+        </div>
+      </section>
+
+      <section class="photos" aria-labelledby="photos-title">
+        <div class="photos-head">
+          <h2 id="photos-title">올린 사진</h2>
+          <button id="more" type="button">사진 더 올리기</button>
+        </div>
+        <ul id="list"></ul>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var FORMATS = [
+    { name: 'JPG', type: 'image/jpeg', ext: 'jpg' },
+    { name: 'PNG', type: 'image/png', ext: 'png' },
+    { name: 'WebP', type: 'image/webp', ext: 'webp' }
+  ];
+  var ICON = {
+    check: '<path d="m5 12 5 5 9-10"/>',
+    warn: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/>',
+    close: '<path d="M6 6l12 12M18 6 6 18"/>'
+  };
+  var format = FORMATS[0];
+  var photos = [];
+  var busy = false;
+  var depth = 0;
+
+  function icon(name, size) {
+    var t = document.createElement('template');
+    t.innerHTML = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + '</svg>';
+    return t.content.firstChild;
+  }
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+  function button(text, onClick) {
+    var b = el('button', '', text);
+    b.type = 'button';
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  function sizeText(bytes) {
+    return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(bytes / 1024)) + 'KB';
+  }
+
+  /* 올리기 */
+  function looksLikeImage(file) {
+    if (file.type) return file.type.indexOf('image/') === 0;
+    return /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif|svg|ico|tiff?)$/i.test(file.name);
+  }
+  function loadImage(url) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () { img.naturalWidth && img.naturalHeight ? resolve(img) : reject(); };
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+  async function addFiles(files) {
+    hideUploadError();
+    var notImages = [], unreadable = [];
+    for (var file of files) {
+      if (!looksLikeImage(file)) { notImages.push(file.name); continue; }
+      var url = URL.createObjectURL(file);
+      try {
+        var img = await loadImage(url);
+        photos.push({ file: file, url: url, w: img.naturalWidth, h: img.naturalHeight, state: 'wait' });
+        $('progress').textContent = '';
+        render();
+      } catch (e) {
+        URL.revokeObjectURL(url);
+        unreadable.push(file.name);
+      }
+    }
+    if (notImages.length || unreadable.length) showUploadError(notImages, unreadable);
+  }
+  function names(list) {
+    return list[0] + (list.length > 1 ? ' 외 ' + (list.length - 1) + '개' : '');
+  }
+  function showUploadError(notImages, unreadable) {
+    var box = $('upload-error');
+    box.replaceChildren();
+    var alertBox = el('div', 'alert');
+    var body = el('div');
+    if (notImages.length) {
+      body.append(el('strong', '', '사진 파일만 올릴 수 있어요'));
+      body.append(el('p', '', names(notImages) + ' 파일은 사진이 아니라서 올리지 못했어요.'));
+    }
+    if (unreadable.length) {
+      body.append(el('strong', '', '사진을 열 수 없어요'));
+      body.append(el('p', '', names(unreadable) + ' 파일은 망가졌거나 이 브라우저에서 볼 수 없는 형식이에요.'));
+    }
+    body.append(el('p', '', '다른 사진을 골라 주세요.'));
+    var row = el('div', 'row');
+    row.append(button('다른 사진 고르기', openPicker), button('닫기', function () { hideUploadError(); (photos.length ? $('more') : $('pick')).focus(); }));
+    body.append(row);
+    alertBox.append(icon('warn', 24), body);
+    box.append(alertBox);
+  }
+  function hideUploadError() { $('upload-error').replaceChildren(); }
+  function openPicker() { $('picker').click(); }
+
+  $('pick').addEventListener('click', openPicker);
+  $('more').addEventListener('click', openPicker);
+  $('picker').addEventListener('change', function () {
+    var files = Array.from(this.files);
+    this.value = '';
+    if (files.length) addFiles(files);
+  });
+  function hasFiles(e) { return e.dataTransfer && Array.from(e.dataTransfer.types).indexOf('Files') >= 0; }
+  addEventListener('dragenter', function (e) { if (hasFiles(e)) { depth++; document.body.classList.add('dragging'); } });
+  addEventListener('dragleave', function (e) { if (hasFiles(e) && --depth <= 0) { depth = 0; document.body.classList.remove('dragging'); } });
+  addEventListener('dragover', function (e) { if (hasFiles(e)) e.preventDefault(); });
+  addEventListener('drop', function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    depth = 0;
+    document.body.classList.remove('dragging');
+    addFiles(Array.from(e.dataTransfer.files));
+  });
+
+  /* 설정 */
+  FORMATS.forEach(function (f) {
+    var b = button('', function () {
+      if (format === f) return;
+      format = f;
+      showFormat();
+      resetResults();
+    });
+    b.append(icon('check', 20), f.name);
+    b.dataset.name = f.name;
+    $('formats').append(b);
+  });
+  function showFormat() {
+    for (var b of $('formats').children) b.setAttribute('aria-pressed', String(b.dataset.name === format.name));
+  }
+  /* 비어 있으면 0, 잘못된 값이면 null */
+  function readWidth() {
+    var v = $('width').value.trim();
+    if (!v) return 0;
+    return /^\d+$/.test(v) && Number(v) > 0 ? Number(v) : null;
+  }
+  function checkWidth() {
+    var ok = readWidth() !== null;
+    var shown = $('width').getAttribute('aria-invalid') === 'true';
+    if (ok === !shown) return ok;
+    $('width').setAttribute('aria-invalid', String(!ok));
+    $('width-error').replaceChildren();
+    if (!ok) {
+      var box = el('div', 'alert inline-error');
+      var body = el('div');
+      body.append(el('strong', '', '가로 크기를 알 수 없어요'));
+      body.append(el('p', '', '1보다 작거나 숫자가 아닌 값이 들어 있어요.'));
+      body.append(el('p', '', '800처럼 숫자만 넣어 주세요.'));
+      var row = el('div', 'row');
+      row.append(button('칸 비우기', function () { $('width').value = ''; checkWidth(); $('width').focus(); }));
+      body.append(row);
+      box.append(icon('warn', 24), body);
+      $('width-error').append(box);
+    }
+    return ok;
+  }
+  $('width').addEventListener('input', function () { checkWidth(); resetResults(); });
+  function clearResult(p) { p.blob = null; p.state = 'wait'; p.message = ''; }
+  function resetResults() {
+    photos.forEach(clearResult);
+    $('progress').textContent = '';
+    render();
+  }
+
+  /* 변환 */
+  function failure(message) { var e = new Error(message); e.friendly = message; return e; }
+  async function convertOne(p, width, target) {
+    var img = await loadImage(p.url);
+    var w = width ? Math.min(width, p.w) : p.w;
+    var h = Math.max(1, Math.round(p.h * w / p.w));
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    var tooBig = '사진이 너무 커서 바꾸지 못했어요. 가로 크기를 더 작게 넣어 주세요.';
+    if (!ctx) throw failure(tooBig);
+    if (target.type === 'image/jpeg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); }
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, w, h);
+    var blob = await new Promise(function (resolve) { canvas.toBlob(resolve, target.type, 0.92); });
+    canvas.width = canvas.height = 0;
+    if (!blob) throw failure(tooBig);
+    if (blob.type !== target.type) throw failure('이 브라우저는 ' + target.name + ' 형식을 만들지 못해요. 다른 형식을 골라 주세요.');
+    return { blob: blob, w: w, h: h };
+  }
+  $('convert').addEventListener('click', async function () {
+    if (busy) return;
+    if (!checkWidth()) { $('width').focus(); return; }
+    var width = readWidth(), target = format, batch = photos.slice(), done = 0, failed = 0;
+    setBusy(true);
+    batch.forEach(clearResult);
+    render();
+    for (var i = 0; i < batch.length; i++) {
+      var p = batch[i];
+      if (photos.indexOf(p) < 0) continue;
+      $('progress').textContent = batch.length + '장 중 ' + (i + 1) + '장째 바꾸고 있어요';
+      p.state = 'work';
+      render();
+      try {
+        var r = await convertOne(p, width, target);
+        p.blob = r.blob; p.rw = r.w; p.rh = r.h; p.ext = target.ext;
+        p.state = 'done';
+        done++;
+      } catch (e) {
+        p.state = 'fail';
+        p.message = (e && e.friendly) || '사진을 읽지 못해서 바꾸지 못했어요. 사진을 빼고 다시 올려 주세요.';
+        failed++;
+      }
+      render();
+    }
+    setBusy(false);
+    if (!photos.length) { $('progress').textContent = ''; $('pick').focus(); return; }
+    $('progress').textContent = failed ? done + '장을 바꿨고 ' + failed + '장은 바꾸지 못했어요' : done + '장을 모두 바꿨어요';
+  });
+  function setBusy(on) {
+    busy = on;
+    $('convert').disabled = on;
+    $('convert').textContent = on ? '사진 바꾸는 중' : '사진 바꾸기';
+    $('width').disabled = on;
+    for (var b of $('formats').children) b.disabled = on;
+  }
+
+  /* 내려받기 */
+  function outputName(p) {
+    var base = p.file.name.replace(/\.[^.]+$/, '') || '사진';
+    var same = photos.filter(function (o) { return (o.file.name.replace(/\.[^.]+$/, '') || '사진') === base; });
+    var n = same.indexOf(p);
+    return base + (n > 0 ? ' (' + (n + 1) + ')' : '') + '.' + p.ext;
+  }
+  function download(p) {
+    if (!p.blob) return;
+    var url = URL.createObjectURL(p.blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = outputName(p);
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  }
+  function remove(p) {
+    photos = photos.filter(function (o) { return o !== p; });
+    URL.revokeObjectURL(p.url);
+    p.node.remove();
+    if (!busy) $('progress').textContent = '';
+    render();
+    (photos.length ? $('more') : $('pick')).focus();
+  }
+
+  /* 화면 그리기 */
+  function buildItem(p) {
+    var li = el('li', 'item');
+    var img = el('img', 'thumb');
+    img.alt = '';
+    img.src = p.url;
+    var info = el('div');
+    var name = el('p', 'name', p.file.name);
+    name.title = p.file.name;
+    p.detail = el('div');
+    info.append(name, p.detail);
+    var x = button('', function () { remove(p); });
+    x.className = 'icon-button';
+    x.setAttribute('aria-label', p.file.name + ' 사진 빼기');
+    x.append(icon('close', 20));
+    li.append(img, info, x);
+    p.node = li;
+  }
+  function drawDetail(p) {
+    p.detail.replaceChildren();
+    var state = el('p', 'state');
+    var size = el('p', 'small', p.w + ' × ' + p.h + ' · ' + sizeText(p.file.size));
+    if (p.state === 'wait') state.append('바꿀 준비가 됐어요');
+    if (p.state === 'work') state.append('바꾸고 있어요');
+    if (p.state === 'done') {
+      state.className = 'state done';
+      state.append(icon('check', 20), '다 바꿨어요');
+      size.textContent = p.rw + ' × ' + p.rh + ' · ' + sizeText(p.blob.size);
+    }
+    if (p.state === 'fail') {
+      state.className = 'state failed';
+      state.setAttribute('role', 'alert');
+      state.append(icon('warn', 20), el('span', '', p.message));
+    }
+    p.detail.append(state, size);
+    if (p.state === 'done') {
+      var row = el('div', 'row');
+      var b = button('내려받기', function () { download(p); });
+      b.setAttribute('aria-label', outputName(p) + ' 내려받기');
+      row.append(b);
+      p.detail.append(row);
+    }
+  }
+  function render() {
+    $('empty').hidden = photos.length > 0;
+    $('work').hidden = photos.length === 0;
+    $('photos-title').textContent = '올린 사진 ' + photos.length + '장';
+    photos.forEach(function (p) {
+      if (!p.node) { buildItem(p); $('list').append(p.node); }
+      if (p.drawn !== p.state) { drawDetail(p); p.drawn = p.state; }
+    });
+  }
+  showFormat();
+})();
+</script>
+</body>
+</html>
